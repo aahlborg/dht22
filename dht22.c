@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sched.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 
 // Array length macro
@@ -16,24 +17,30 @@
 #define DATA_BYTES (5u)
 #define DATA_BITS (8u * DATA_BYTES)
 
+#define READ_RETRIES (1u)
+
 // Sensor read status codes
 #define E_OK (0)
 #define E_TIMEOUT (-1)
 #define E_PERIOD (-2)
 #define E_CHECKSUM (-3)
+#define E_INVALID (-4)
 
 
 struct sensor
 {
   int pin;
   char name[20];
+  int status;
+  float temp;
+  float humidity;
 };
 
 
 struct sensor sensors[] = 
 {
-  {4, "Sensor 1"},
-  {17, "Sensor 2"}
+  {4, "Sensor 1", E_INVALID, 0.0f, 0.0f},
+  {17, "Sensor 2", E_INVALID, 0.0f, 0.0f}
 };
 
 
@@ -205,20 +212,55 @@ void decode_data(unsigned char data[5], float * temp, float * humid)
   *humid = humid_int / 10.0f;
 }
 
-int process_sensor(struct sensor sensor)
+int process_sensor(struct sensor * sensor)
 {
   unsigned char data[DATA_BYTES];
 
-  int status = read_sensor(sensor.pin, data);
-  if (E_OK == status)
+  sensor->status = read_sensor(sensor->pin, data);
+  if (E_OK == sensor->status)
   {
-    float temp, humid;
-    decode_data(data, &temp, &humid);
-    printf("Sensor %s\n", sensor.name);
-    printf("Temp: %.1f *C, humidity: %.1f \%RH\n", temp, humid);
+    decode_data(data, &sensor->temp, &sensor->humidity);
   }
 
-  return status;
+  return sensor->status;
+}
+
+void print_human(void)
+{
+  for (int i = 0; i < ARR_LEN(sensors); i++)
+  {
+    if (E_OK == sensors[i].status)
+    {
+      printf("%s: Temp: %.1f, Humidity: %.1f\n", sensors[i].name, sensors[i].temp, sensors[i].humidity);
+    }
+    else
+    {
+      printf("%s: Invalid status: %d\n", sensors[i].name, sensors[i].status);
+    }
+  }
+}
+
+void print_json(void)
+{
+  //printf("sensors =\n");
+  printf("[\n");
+  for (int i = 0; i < ARR_LEN(sensors); i++)
+  {
+    printf("  {\n");
+    printf("    \"name\" = \"%s\"\n", sensors[i].name);
+    if (E_OK == sensors[i].status)
+    {
+      printf("    \"status\" = \"OK\"\n");
+      printf("    \"temp\" = \"%.1f\"\n", sensors[i].temp);
+      printf("    \"humidity\" = \"%.1f\"\n", sensors[i].humidity);
+    }
+    else
+    {
+      printf("    \"status\" = \"NOK\"\n");
+    }
+    printf("  },\n");
+  }
+  printf("]\n");
 }
 
 int main(int argc, char** argv)
@@ -229,14 +271,28 @@ int main(int argc, char** argv)
   
   for (int i = 0; i < ARR_LEN(sensors); i++)
   {
-    for (int j = 0; j < 5; j++)
+    bool first_try = true;
+    for (int j = 0; j < READ_RETRIES; j++)
     {
-      if (E_OK == process_sensor(sensors[i]))
+      if (!first_try)
+      {
+        // Wait 2 seconds for next attempt
+        sleep(2);
+      }
+      first_try = false;
+      if (E_OK == process_sensor(&sensors[i]))
         break;
-      // Wait 2 seconds for next attempt
-      sleep(2);
     }
   }
- 
+
+  if (argc >= 2 && 0 == strcmp("--json", argv[1]))
+  {
+    print_json();
+  }
+  else
+  {
+    print_human();
+  }
+
   bcm2835_close();
 }

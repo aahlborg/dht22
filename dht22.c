@@ -17,7 +17,7 @@
 #define DATA_BYTES (5u)
 #define DATA_BITS (8u * DATA_BYTES)
 
-#define READ_RETRIES (1u)
+#define READ_RETRIES (2u)
 
 // Sensor read status codes
 #define E_OK (0)
@@ -30,17 +30,9 @@
 struct sensor
 {
   int pin;
-  char name[20];
   int status;
   float temp;
   float humidity;
-};
-
-
-struct sensor sensors[] = 
-{
-  {4, "Sensor 1", E_INVALID, 0.0f, 0.0f},
-  {17, "Sensor 2", E_INVALID, 0.0f, 0.0f}
 };
 
 
@@ -225,29 +217,29 @@ int process_sensor(struct sensor * sensor)
   return sensor->status;
 }
 
-void print_human(void)
+void print_human(int count, struct sensor sensors[])
 {
-  for (int i = 0; i < ARR_LEN(sensors); i++)
+  for (int i = 0; i < count; i++)
   {
     if (E_OK == sensors[i].status)
     {
-      printf("%s: Temp: %.1f, Humidity: %.1f\n", sensors[i].name, sensors[i].temp, sensors[i].humidity);
+      printf("%u: Temp: %.1f, Humidity: %.1f\n", sensors[i].pin, sensors[i].temp, sensors[i].humidity);
     }
     else
     {
-      printf("%s: Invalid status: %d\n", sensors[i].name, sensors[i].status);
+      printf("%u: Invalid status: %d\n", sensors[i].pin, sensors[i].status);
     }
   }
 }
 
-void print_json(void)
+void print_json(int count, struct sensor sensors[])
 {
   //printf("sensors =\n");
   printf("[\n");
-  for (int i = 0; i < ARR_LEN(sensors); i++)
+  for (int i = 0; i < count; i++)
   {
     printf("  {\n");
-    printf("    \"name\" = \"%s\"\n", sensors[i].name);
+    printf("    \"pin\" = \"%u\"\n", sensors[i].pin);
     if (E_OK == sensors[i].status)
     {
       printf("    \"status\" = \"OK\"\n");
@@ -263,16 +255,18 @@ void print_json(void)
   printf("]\n");
 }
 
-int main(int argc, char** argv)
+int process_sensors(int count, struct sensor sensors[], int retries)
 {
   // Initialize IO
   if (!bcm2835_init())
+  {
     return 1;
-  
-  for (int i = 0; i < ARR_LEN(sensors); i++)
+  }
+
+  for (int i = 0; i < count; i++)
   {
     bool first_try = true;
-    for (int j = 0; j < READ_RETRIES; j++)
+    for (int j = 0; j < retries; j++)
     {
       if (!first_try)
       {
@@ -285,14 +279,31 @@ int main(int argc, char** argv)
     }
   }
 
+  bcm2835_close();
+
+  return E_OK;
+}
+
+int main(int argc, char** argv)
+{
+  struct sensor sensors[] = 
+  {
+    {4, E_INVALID, 0.0f, 0.0f},
+    {17, E_INVALID, 0.0f, 0.0f}
+  };
+
+  int status = process_sensors(ARR_LEN(sensors), sensors, READ_RETRIES);
+  if (E_OK != status)
+  {
+    exit(1);
+  }
+
   if (argc >= 2 && 0 == strcmp("--json", argv[1]))
   {
-    print_json();
+    print_json(ARR_LEN(sensors), sensors);
   }
   else
   {
-    print_human();
+    print_human(ARR_LEN(sensors), sensors);
   }
-
-  bcm2835_close();
 }

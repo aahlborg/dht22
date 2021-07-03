@@ -199,7 +199,8 @@ int read_sensor(int pin, unsigned char data[5])
 void decode_data(unsigned char data[5], float * temp, float * humid)
 {
   short temp_int = (data[2] << 8) | (data[3]);
-  *temp = temp_int / 10.0f;
+  int sign = (temp_int & 0x8000) ? -1 : 1;
+  *temp = sign * (temp_int & 0x7fff) / 10.0f;
   short humid_int = (data[0] << 8) | (data[1]);
   *humid = humid_int / 10.0f;
 }
@@ -211,6 +212,8 @@ int process_sensor(struct sensor * sensor)
   sensor->status = read_sensor(sensor->pin, data);
   if (E_OK == sensor->status)
   {
+    printf("data: [%02x, %02x, %02x, %02x, %02x]\n",
+           data[0], data[1], data[2], data[3], data[4]);
     decode_data(data, &sensor->temp, &sensor->humidity);
   }
 
@@ -275,7 +278,9 @@ int process_sensors(int count, struct sensor sensors[], int retries)
       }
       first_try = false;
       if (E_OK == process_sensor(&sensors[i]))
+      {
         break;
+      }
     }
   }
 
@@ -289,7 +294,7 @@ int main(int argc, char** argv)
   struct sensor sensors[] = 
   {
     {4, E_INVALID, 0.0f, 0.0f},
-    {17, E_INVALID, 0.0f, 0.0f}
+//    {17, E_INVALID, 0.0f, 0.0f}
   };
 
   int status = process_sensors(ARR_LEN(sensors), sensors, READ_RETRIES);

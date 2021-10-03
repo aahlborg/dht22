@@ -1,14 +1,14 @@
 import pydht22
 import time
 from datetime import datetime, timedelta
-import urllib.request
+import paho.mqtt.client as mqtt
 
 
-baseUrl = "http://api.thingspeak.com/update?api_key={}&field1={:.1f}&field2={:.1f}"
+broker = ("hass.lan", 1883)
 sensors = {
-    # GPIO pin: (channel_id, api_key)
-    4: ("1234567", "ABCD123"),
-#    17: ("1234568", "ABCD123")
+    # GPIO pin: topic
+    4: "home/garage",
+#    17: "home/bedroom",
 }
 
 
@@ -25,23 +25,30 @@ def sleep_until_next_even_minute(minutes):
     while (datetime.now() < t):
         time.sleep(10)
 
+def publish(client, topic, value):
+    rc, _ = client.publish(topic, value, qos=1)
+    if rc == 0:
+        print(f"{topic}: {value}")
+    else:
+        print(f"Failed to publish {topic} with error code {rc}")
+
 def main():
     while True:
         sleep_until_next_even_minute(10)
         print(datetime.now())
+        client = mqtt.Client()
+        client.connect(broker[0], broker[1], 60)
         pins = sensors.keys()
         readings = pydht22.read_sensors(pins)
         for k, v in readings.items():
-            channelId = sensors[k][0]
-            apiKey = sensors[k][1]
+            topic = sensors[k]
             temp = v[0]
             humidity = v[1]
-            print("{}: Temp: {:.1f} C    Humidity: {:.1f} % ".format(k, temp, humidity))
-            url = baseUrl.format(apiKey, temp, humidity)
-            print(url)
-            f = urllib.request.urlopen(url)
-            print(f.read())
-            f.close()
+            print("{}: Temp: {:.1f} C, Humidity: {:.1f} % ".format(k, temp, humidity))
+            temp_topic = topic + "/temperature"
+            publish(client, temp_topic, temp)
+            humid_topic = topic + "/humidity"
+            publish(client, humid_topic, humidity)
 
 if __name__ == "__main__":
     main()

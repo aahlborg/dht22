@@ -212,8 +212,8 @@ int process_sensor(struct sensor * sensor)
   sensor->status = read_sensor(sensor->pin, data);
   if (E_OK == sensor->status)
   {
-    printf("data: [%02x, %02x, %02x, %02x, %02x]\n",
-           data[0], data[1], data[2], data[3], data[4]);
+    //printf("data: [%02x, %02x, %02x, %02x, %02x]\n",
+    //       data[0], data[1], data[2], data[3], data[4]);
     decode_data(data, &sensor->temp, &sensor->humidity);
   }
 

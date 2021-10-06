@@ -18,6 +18,7 @@
 #define DATA_BITS (8u * DATA_BYTES)
 
 #define READ_RETRIES (2u)
+#define MAX_NUM_SENSORS (4u)
 
 // Sensor read status codes
 #define E_OK (0)
@@ -242,18 +243,25 @@ void print_json(int count, struct sensor sensors[])
   for (int i = 0; i < count; i++)
   {
     printf("  {\n");
-    printf("    \"pin\" = \"%u\"\n", sensors[i].pin);
+    printf("    \"pin\": \"%u\",\n", sensors[i].pin);
     if (E_OK == sensors[i].status)
     {
-      printf("    \"status\" = \"OK\"\n");
-      printf("    \"temp\" = \"%.1f\"\n", sensors[i].temp);
-      printf("    \"humidity\" = \"%.1f\"\n", sensors[i].humidity);
+      printf("    \"status\": \"OK\",\n");
+      printf("    \"temp\": \"%.1f\",\n", sensors[i].temp);
+      printf("    \"humidity\": \"%.1f\"\n", sensors[i].humidity);
     }
     else
     {
-      printf("    \"status\" = \"NOK\"\n");
+      printf("    \"status\": \"NOK\"\n");
     }
-    printf("  },\n");
+    if (i == count - 1)
+    {
+      printf("  }\n");
+    }
+    else
+    {
+      printf("  },\n");
+    }
   }
   printf("]\n");
 }
@@ -291,24 +299,47 @@ int process_sensors(int count, struct sensor sensors[], int retries)
 
 int main(int argc, char** argv)
 {
-  struct sensor sensors[] = 
-  {
-    {4, E_INVALID, 0.0f, 0.0f},
-//    {17, E_INVALID, 0.0f, 0.0f}
-  };
+  int output_json = 0;
+  int num_sensors = 0;
+  int retries = READ_RETRIES;
+  struct sensor sensors[MAX_NUM_SENSORS] = {{0}};
 
-  int status = process_sensors(ARR_LEN(sensors), sensors, READ_RETRIES);
+  for (int i = 1; i < argc; i++)
+  {
+    if (0 == strcmp("--json", argv[i]))
+    {
+      output_json = 1;
+    }
+    else if (0 == strcmp("-n", argv[i]))
+    {
+      retries = atoi(argv[i + 1]);
+      i++;
+    }
+    else
+    {
+      if (num_sensors == ARR_LEN(sensors))
+      {
+        printf("Too many sensors\n");
+        exit(1);
+      }
+      sensors[num_sensors].pin = atoi(argv[i]);
+      sensors[num_sensors].status = E_INVALID;
+      num_sensors++;
+    }
+  }
+
+  int status = process_sensors(num_sensors, sensors, retries);
   if (E_OK != status)
   {
     exit(1);
   }
 
-  if (argc >= 2 && 0 == strcmp("--json", argv[1]))
+  if (output_json)
   {
-    print_json(ARR_LEN(sensors), sensors);
+    print_json(num_sensors, sensors);
   }
   else
   {
-    print_human(ARR_LEN(sensors), sensors);
+    print_human(num_sensors, sensors);
   }
 }

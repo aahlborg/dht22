@@ -39,7 +39,7 @@ def main():
         client = mqtt.Client()
         client.connect(broker[0], broker[1], 60)
         pins = sensors.keys()
-        readings = pydht22.read_sensors(pins)
+        readings = pydht22.read_sensors_subproc(pins)
         for k, v in readings.items():
             topic = sensors[k]
             temp = v[0]
